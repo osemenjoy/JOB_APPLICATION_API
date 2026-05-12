@@ -55,17 +55,7 @@ A professional REST API for managing job applications built with **FastAPI**, fe
 
 ## 🚀 Installation & Setup
 
-### Option 1: Automatic Setup (Windows)
-
-```bash
-# Navigate to project directory
-cd JOB_APP_API
-
-# Run setup script
-setup.bat
-```
-
-### Option 2: Manual Setup
+### Manual Setup
 
 #### 1. Create Virtual Environment
 ```bash
@@ -264,5 +254,5 @@ Contributions are welcome! Please feel free to submit pull requests.
 
 ---
 
-**Created:** November 2024  
-**Version:** 2.0.0 (with authentication & database)
+**Created:** May 2026
+**Version:** 1.0.0 (with authentication & database)
