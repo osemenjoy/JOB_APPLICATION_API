@@ -12,13 +12,14 @@ A professional REST API for managing job applications built with **FastAPI**, fe
 - ✅ Role-based access control (Admin & Regular Users)
 
 ### Job Application Management
-- ✅ Submit job applications with detailed information
+- ✅ Submit job applications with cover letter and resume
 - ✅ Retrieve applications with pagination
-- ✅ Update application details and status
+- ✅ Update application status (admin only)
 - ✅ Delete applications
-- ✅ Comprehensive filtering and search capabilities
-- ✅ Application status tracking (pending, reviewing, accepted, rejected)
-- ✅ Application rating system (for admins)
+- ✅ Skill-based filtering for applicants and hirers
+- ✅ Application status tracking (pending, reviewed, shortlisted, rejected, accepted)
+- ✅ Company profile management for hirers
+- ✅ Applicant profile with skills and experience
 
 ### Database & Data Persistence
 - ✅ SQLAlchemy ORM integration
@@ -154,10 +155,10 @@ The API will be available at: **http://localhost:8000**
 curl -X POST "http://localhost:8000/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "john_doe",
     "email": "john@example.com",
+    "full_name": "John Doe",
     "password": "SecurePass123",
-    "full_name": "John Doe"
+    "role": "APPLICANT"
   }'
 ```
 
@@ -165,15 +166,18 @@ curl -X POST "http://localhost:8000/auth/register" \
 ```json
 {
   "id": 1,
-  "username": "john_doe",
   "email": "john@example.com",
   "full_name": "John Doe",
+  "role": "APPLICANT",
   "is_active": true,
-  "is_admin": false,
   "created_at": "2024-11-15T10:30:45.123456",
   "updated_at": "2024-11-15T10:30:45.123456"
 }
 ```
+
+**Supported Roles:**
+- `APPLICANT`: Job seeker
+- `HIRER`: Company hiring manager
 
 **Password Requirements:**
 - Minimum 8 characters
@@ -188,7 +192,7 @@ curl -X POST "http://localhost:8000/auth/register" \
 curl -X POST "http://localhost:8000/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "john_doe",
+    "email": "john@example.com",
     "password": "SecurePass123"
   }'
 ```
@@ -239,22 +243,47 @@ curl -X POST "http://localhost:8000/auth/logout" \
 
 **Endpoint:** `POST /applications`
 
+**Request Body:**
+```json
+{
+  "job_id": 1,
+  "cover_letter": "I am interested in this position...",
+  "resume_url": "https://example.com/resume.pdf"
+}
+```
+
 ```bash
 curl -X POST "http://localhost:8000/applications" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Jane Smith",
-    "email": "jane@example.com",
-    "phone": "555-987-6543",
-    "skills": ["JavaScript", "React", "Node.js"],
-    "experience_years": 5,
-    "position": "Frontend Developer",
-    "cover_letter": "I am interested in this position..."
+    "job_id": 1,
+    "cover_letter": "I am very interested in this position...",
+    "resume_url": "https://example.com/resume.pdf"
   }'
 ```
 
-### Get All Applications
+**Response:**
+```json
+{
+  "id": 1,
+  "applicant_id": 1,
+  "job_id": 1,
+  "company_id": 1,
+  "cover_letter": "I am very interested...",
+  "resume_url": "https://example.com/resume.pdf",
+  "status": "PENDING",
+  "applied_at": "2024-11-15T10:30:45.123456",
+  "updated_at": "2024-11-15T10:30:45.123456"
+}
+```
+
+**Error Handling:**
+- Returns 400 if applicant has already applied to the job
+- Returns 404 if job not found
+- Returns 403 if user is not an applicant
+
+### Get My Applications
 
 **Endpoint:** `GET /applications`
 
@@ -269,35 +298,35 @@ curl -X GET "http://localhost:8000/applications?skip=0&limit=10" \
 
 ### Get Specific Application
 
-**Endpoint:** `GET /applications/{id}`
+**Endpoint:** `GET /applications/{application_id}`
 
 ```bash
 curl -X GET "http://localhost:8000/applications/1" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
+**Access Rules:**
+- Users can only access their own applications
+- Admins can access any application
+
 ### Update Application
 
-**Endpoint:** `PUT /applications/{id}`
+**Endpoint:** `PUT /applications/{application_id}`
 
 ```bash
 curl -X PUT "http://localhost:8000/applications/1" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "experience_years": 6,
-    "skills": ["JavaScript", "React", "Node.js", "TypeScript"]
+    "status": "REVIEWED"
   }'
 ```
 
-**Admin-only fields (requires admin role):**
-- `status`: pending, reviewing, accepted, rejected
-- `rating`: 0-5
-- `notes`: Internal notes
+**Note:** Only admins can update application status
 
 ### Delete Application
 
-**Endpoint:** `DELETE /applications/{id}`
+**Endpoint:** `DELETE /applications/{application_id}`
 
 ```bash
 curl -X DELETE "http://localhost:8000/applications/1" \
@@ -313,123 +342,90 @@ curl -X GET "http://localhost:8000/applications/filter/skill?skill=Python&skip=0
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-### Advanced Search & Filter
+**Role-Based Behavior:**
+- **Applicants**: Returns jobs they applied to that require the searched skill
+- **Hirers**: Returns applications from their company where applicants have the searched skill
 
-**Endpoint:** `GET /applications/filter/search`
+**Query Parameters:**
+- `skill` (string, required): Skill to filter by (case-insensitive)
+- `skip` (int, default=0): Number of records to skip
+- `limit` (int, default=10, max=100): Records per page
 
-```bash
-curl -X GET "http://localhost:8000/applications/filter/search?skill=Python&position=Backend&min_experience=3&max_experience=10" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
+## � Role-Based Features
 
-**Available Filters:**
-- `skill`: Exact skill name (case-insensitive)
-- `position`: Position name (partial match)
-- `min_experience`: Minimum years of experience
-- `max_experience`: Maximum years of experience
-- `status`: Application status (pending, reviewing, accepted, rejected)
-- `min_rating`: Minimum rating (admin only)
-- `skip`: Pagination offset
-- `limit`: Pagination limit
+### Applicant Features
+- Create and manage applicant profile with skills and experience
+- Browse and apply for jobs
+- View their own applications
+- Filter their applications by job skill requirements
+- Upload and manage resumes
+- Track application status
 
-## 👨‍💼 Admin Endpoints
+### Hirer (Company) Features
+- Create and manage company profile
+- Post job listings with required skills
+- View all applications to their jobs
+- Filter applicants by specific skills
+- Update application status (reviewed, shortlisted, rejected, accepted)
+- Manage job postings
 
-### Get All Users (Admin Only)
-
-**Endpoint:** `GET /admin/users`
-
-```bash
-curl -X GET "http://localhost:8000/admin/users?skip=0&limit=10" \
-  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN"
-```
-
-### Get All Applications (Admin Only)
-
-**Endpoint:** `GET /admin/applications`
-
-```bash
-curl -X GET "http://localhost:8000/admin/applications?skip=0&limit=10" \
-  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN"
-```
+### Admin Features
+- Access all users and applications
+- Update application statuses
+- Manage user accounts
+- View system-wide statistics
 
 ## 📊 Database Models
 
 ### User Model
 ```python
 - id: Integer (Primary Key)
-- username: String (Unique)
 - email: String (Unique, Email)
 - full_name: String
 - hashed_password: String
+- role: Enum (APPLICANT, HIRER)
 - is_active: Boolean
-- is_admin: Boolean
+- verification_code: String (Optional)
+- verification_code_expires_at: DateTime (Optional)
 - created_at: DateTime
 - updated_at: DateTime
-- applications: Relationship to Application
+- applicant_profile: Relationship to ApplicantProfile (Optional)
+- company_profile: Relationship to CompanyProfile (Optional)
 - refresh_tokens: Relationship to RefreshToken
-```
-
-### Application Model
-```python
-- id: Integer (Primary Key)
-- user_id: Integer (Foreign Key to User)
-- name: String
-- email: String
-- phone: String
-- skills: Array of Strings
-- experience_years: Integer
-- position: String
-- cover_letter: Text (Optional)
-- status: String (pending, reviewing, accepted, rejected)
-- rating: Float (0-5)
-- notes: Text (Admin only)
-- submitted_at: DateTime
-- updated_at: DateTime
-- user: Relationship to User
-```
-
-### RefreshToken Model
-```python
-- id: Integer (Primary Key)
-- user_id: Integer (Foreign Key to User)
-- token: String (Unique)
-- is_revoked: Boolean
-- created_at: DateTime
-- expires_at: DateTime
-- user: Relationship to User
 ```
 
 ## 🧪 Testing
 
-### Run Comprehensive Test Suite
+### Run Tests
 
 ```bash
-# Install requests library
-pip install requests
+# Make sure the API server is running
+python main.py
 
-# Run tests (make sure API server is running)
-python test_api_comprehensive.py
+# In another terminal, run the test suite
+pytest app/tests/ -v
 ```
-
-The test suite covers:
-- User registration
-- User login
-- Token refresh
-- Application submission
-- Retrieving applications
-- Filtering and searching
-- Updating applications
-- Deleting applications
-- Logout
 
 ### Manual Testing with Swagger UI
 
-1. Go to http://localhost:8000/docs
-2. Register a new user using `/auth/register`
-3. Login using `/auth/login`
-4. Copy the `access_token`
-5. Click "Authorize" button and enter: `Bearer YOUR_ACCESS_TOKEN`
-6. Test all endpoints with the interactive UI
+1. Navigate to http://localhost:8000/docs
+2. Register a new user using `/auth/register` endpoint
+3. Login using `/auth/login` endpoint
+4. Copy the `access_token` from the response
+5. Click the "Authorize" button at the top and enter: `Bearer YOUR_ACCESS_TOKEN`
+6. Test all endpoints with the interactive Swagger UI
+
+### Key Test Scenarios
+
+- User registration with different roles (APPLICANT, HIRER)
+- User login and token management
+- Job creation and management (for hirers)
+- Job application submission
+- Duplicate application prevention
+- Skill-based filtering for applicants
+- Skill-based filtering for hirers
+- Application status updates (admin only)
+- Access control and authorization
 
 ## 🗄️ Database Configuration
 
@@ -441,42 +437,70 @@ DATABASE_URL=sqlite:///./job_applications.db
 
 Database file will be created automatically in the project directory.
 
-### PostgreSQL (Production)
-
-1. Install PostgreSQL and create a database:
-```bash
-createdb job_app_db
-```
-
-2. Update `.env`:
-```env
-DATABASE_URL=postgresql://username:password@localhost:5432/job_app_db
-```
-
-3. Install psycopg2:
-```bash
-pip install psycopg2-binary
-```
 
 ## 📁 Project Structure
 
 ```
 JOB_APP_API/
-├── main.py                      # Main FastAPI application
-├── models.py                    # SQLAlchemy models (User, Application, RefreshToken)
-├── schemas.py                   # Pydantic validation schemas
-├── database.py                  # Database configuration and utilities
-├── security.py                  # Authentication and authorization utilities
-├── config.py                    # Application configuration
-├── requirements.txt             # Python dependencies
-├── .env.example                 # Example environment variables
-├── .gitignore                   # Git ignore file
-├── test_api_comprehensive.py    # Comprehensive test suite
-├── test_api.py                  # Basic test script
-├── setup.bat                    # Windows setup script
-├── run.bat                      # Windows run script
-├── README.md                    # This file
-└── QUICKSTART.md               # Quick start guide
+├── main.py                              # FastAPI application entry point
+├── alembic.ini                          # Database migration config
+├── requirements.txt                     # Python dependencies
+├── README.md                            # This file
+├── alembic/                             # Database migrations
+│   ├── versions/                        # Migration scripts
+│   ├── env.py                          # Alembic environment configuration
+│   └── script.py.mako                  # Migration template
+├── app/
+│   ├── __init__.py
+│   ├── main.py                         # App initialization and configuration
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── deps.py                     # Dependency injection
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       ├── api.py                  # API router setup
+│   │       └── endpoints/
+│   │           ├── __init__.py
+│   │           ├── auth.py             # Authentication endpoints
+│   │           ├── applications.py     # Application endpoints
+│   │           ├── jobs.py             # Job endpoints
+│   │           └── users.py            # User endpoints
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py                   # Configuration settings
+│   │   ├── security.py                 # Authentication and security
+│   │   └── settings.py                 # Environment settings
+│   ├── db/
+│   │   ├── __init__.py
+│   │   ├── base.py                     # SQLAlchemy declarative base
+│   │   └── session.py                  # Database session management
+│   ├── middleware/
+│   │   ├── __init__.py
+│   │   └── logging.py                  # Logging middleware
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── user.py                     # User, ApplicantProfile, CompanyProfile models
+│   │   ├── application.py              # Application model
+│   │   └── job.py                      # Job model
+│   ├── repositories/
+│   │   ├── __init__.py
+│   │   ├── application_repository.py   # Application data access
+│   │   ├── job_repository.py           # Job data access
+│   │   └── user_repository.py          # User data access
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── application.py              # Application validation schemas
+│   │   ├── job.py                      # Job validation schemas
+│   │   ├── token.py                    # Token schemas
+│   │   └── user.py                     # User validation schemas
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── application_service.py      # Application business logic
+│   │   ├── job_service.py              # Job business logic
+│   │   └── user_service.py             # User business logic
+│   └── tests/
+│       ├── __init__.py
+│       └── applications.py             # Application tests
 ```
 
 ## 🔒 Security Best Practices
@@ -496,112 +520,6 @@ JOB_APP_API/
 5. **Password Hashing**: All passwords are hashed using bcrypt
 
 6. **CORS Configuration**: Update `CORS_ORIGINS` in `config.py` for your domain
-
-## 🚀 Deployment
-
-### Using Gunicorn (Production)
-
-```bash
-# Install gunicorn
-pip install gunicorn
-
-# Run with gunicorn
-gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-```
-
-### Using Docker
-
-```bash
-# Build image
-docker build -t job-app-api .
-
-# Run container
-docker run -p 8000:8000 \
-  -e DATABASE_URL="postgresql://..." \
-  -e SECRET_KEY="your-secret-key" \
-  job-app-api
-```
-
-### Using Docker Compose
-
-```yaml
-version: '3.8'
-
-services:
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql://user:password@db:5432/job_app_db
-      SECRET_KEY: ${SECRET_KEY}
-    depends_on:
-      - db
-
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: job_app_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
-```
-
-## 📈 Future Enhancements
-
-- [ ] Email notifications for application updates
-- [ ] File upload support for resumes/portfolios
-- [ ] Application timeline/status history
-- [ ] Interview scheduling
-- [ ] Email templates customization
-- [ ] Bulk operations (import/export)
-- [ ] Application analytics dashboard
-- [ ] Two-factor authentication (2FA)
-- [ ] OAuth2 social login integration
-- [ ] GraphQL endpoint
-- [ ] WebSocket real-time notifications
-- [ ] Rate limiting per user
-- [ ] Advanced search with Elasticsearch
-
-## 🐛 Troubleshooting
-
-### "Database is locked" error (SQLite)
-
-This typically happens with concurrent access. Solution:
-- Use PostgreSQL for production
-- Or implement connection pooling for SQLite
-
-### "Invalid token" error
-
-- Check if token is expired (30 minutes)
-- Use refresh endpoint to get new access token
-- Ensure token is in correct format: `Bearer TOKEN`
-
-### "Permission denied" error
-
-- User is trying to access another user's data
-- Check if user has admin role for admin endpoints
-- Use `/auth/logout` and re-login if needed
-
-### Module not found errors
-
-```bash
-# Reinstall dependencies
-pip install -r requirements.txt
-
-# Or use --force-reinstall
-pip install --force-reinstall -r requirements.txt
-```
-
-## 📞 Support & Documentation
-
-- Full API docs: http://localhost:8000/docs
-- Alternative docs: http://localhost:8000/redoc
-- Test suite: `python test_api_comprehensive.py`
 
 ## 📄 License
 

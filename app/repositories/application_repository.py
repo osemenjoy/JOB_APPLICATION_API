@@ -3,6 +3,7 @@ Repository for job application data access.
 """
 
 from sqlalchemy.orm import Session
+from sqlalchemy import cast, String
 from typing import Optional, List
 from datetime import datetime
 
@@ -65,10 +66,24 @@ class ApplicationRepository:
         apps = query.offset(skip).limit(limit).all()
         return total, apps
     
-    def filter_by_skill(self, skill: str, applicant_id: Optional[int] = None, skip: int = 0, limit: int = 10) -> tuple[int, List[Application]]:
-        """Filter applications by skill (case-insensitive)."""
-        query = self.db.query(Application).filter(Application.skills.ilike(f"%{skill}%"))
-        query = query.filter(Application.applicant_id == applicant_id)
+    def filter_applications_by_applicant_skill(self, applicant_id: int, skill: str, skip: int = 0, limit: int = 10) -> tuple[int, List[Application]]:
+        """Filter applications by skill matching job requirements for an applicant."""
+        from app.models.job import Job
+        query = self.db.query(Application).join(Job).filter(
+            Application.applicant_id == applicant_id,
+            cast(Job.required_skills, String).ilike(f"%{skill}%")
+        )
+        total = query.count()
+        apps = query.offset(skip).limit(limit).all()
+        return total, apps
+    
+    def filter_applications_by_hirer_applicant_skill(self, company_id: int, skill: str, skip: int = 0, limit: int = 10) -> tuple[int, List[Application]]:
+        """Filter applications for a company by applicant skill matching."""
+        from app.models.user import ApplicantProfile
+        query = self.db.query(Application).join(ApplicantProfile).filter(
+            Application.company_id == company_id,
+            cast(ApplicantProfile.skills, String).ilike(f"%{skill}%")
+        )
         total = query.count()
         apps = query.offset(skip).limit(limit).all()
         return total, apps

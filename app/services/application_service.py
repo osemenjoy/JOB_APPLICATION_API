@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import Optional, List, Tuple
 
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.application import Application
 from app.models.job import Job
 from app.repositories.application_repository import ApplicationRepository
@@ -159,17 +159,52 @@ class ApplicationService:
         skip: int = 0,
         limit: int = 10
     ) -> PaginatedApplicationResponse:
-        """Filter applications by skill."""
-        # Regular users see only their own applications
-        user_id = user.id
-        total, applications = self.app_repo.filter_by_skill(skill, user_id, skip, limit)
+        """Filter applications by skill based on user role.
         
-        return PaginatedApplicationResponse(
-            total=total,
-            skip=skip,
-            limit=limit,
-            items=[ApplicationResponse.from_orm(app) for app in applications]
-        )
+        For Applicants: Returns jobs they applied to where job requires this skill.
+        For Hirers: Returns applicants whose skills match the search.
+        """
+        if user.role == UserRole.APPLICANT:
+            # For applicants: return jobs they applied to where job requires this skill
+            if not user.applicant_profile:
+                return PaginatedApplicationResponse(
+                    total=0,
+                    skip=skip,
+                    limit=limit,
+                    items=[]
+                )
+            total, applications = self.app_repo.filter_applications_by_applicant_skill(
+                user.applicant_profile.id, skill, skip, limit
+            )
+            return PaginatedApplicationResponse(
+                total=total,
+                skip=skip,
+                limit=limit,
+                items=[ApplicationResponse.from_orm(app) for app in applications]
+            )
+        
+        elif user.role == UserRole.HIRER:
+            # For hirers: return applicants whose skills match the search
+            if not user.company_profile:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Please complete your company profile"
+                )
+            total, applications = self.app_repo.filter_applications_by_hirer_applicant_skill(
+                user.company_profile.id, skill, skip, limit
+            )
+            return PaginatedApplicationResponse(
+                total=total,
+                skip=skip,
+                limit=limit,
+                items=[ApplicationResponse.from_orm(app) for app in applications]
+            )
+        
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid user role"
+            )
 
     def get_company_applications(self, company_id: int, skip: int = 0, limit: int = 10) -> PaginatedApplicationResponse:
         """Get all applications for a specific company."""
